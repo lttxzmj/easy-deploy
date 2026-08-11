@@ -9,6 +9,19 @@ cd "$dir" 2>/dev/null || { echo "ERROR: cannot cd to '$dir'"; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 dep_in_pkg() { [ -f package.json ] && grep -qE "\"$1\"[[:space:]]*:" package.json; }
 
+# CLIs like wrangler are often a local devDependency, not a global install.
+cli_version() {
+  if have "$1"; then "$1" --version 2>/dev/null | head -1
+  elif [ -x "node_modules/.bin/$1" ]; then
+    echo "$("node_modules/.bin/$1" --version 2>/dev/null | head -1) (local devDependency)"
+  fi
+}
+run_cli() {
+  if have "$1"; then "$@"
+  elif [ -x "node_modules/.bin/$1" ]; then local c="$1"; shift; "node_modules/.bin/$c" "$@"
+  else return 127; fi
+}
+
 echo "== project =="
 echo "dir: $(pwd)"
 
@@ -23,6 +36,10 @@ if [ -f package.json ]; then
 
   if dep_in_pkg next; then
     framework="nextjs"; build_cmd="build (next build)"; output_dir=".next"
+    if dep_in_pkg "@opennextjs/cloudflare" || dep_in_pkg "@cloudflare/vite-plugin" || dep_in_pkg vinext; then
+      framework="nextjs-on-cloudflare"; build_cmd="build"; output_dir="dist"
+      echo "NOTE: Next.js wired for Cloudflare Workers -- deploy with wrangler, NOT Vercel"
+    fi
   elif dep_in_pkg nuxt; then
     framework="nuxt"; build_cmd="build"; output_dir=".output"
   elif dep_in_pkg astro; then
@@ -42,7 +59,17 @@ elif [ -f index.html ]; then
   framework="static"
   echo "package.json: no (index.html at root -> pure static)"
 else
-  echo "package.json: no, index.html: no -- inspect manually"
+  echo "package.json: no, index.html: no at root"
+  candidates=$(find . -maxdepth 3 \( -name node_modules -o -name .git \) -prune -o \
+    \( -name package.json -o -name index.html \) -print 2>/dev/null \
+    | sed 's|/[^/]*$||' | sort -u | head -10)
+  if [ -n "$candidates" ]; then
+    echo "candidate sub-projects found -- the app likely lives in one of these;"
+    echo "re-run preflight against it and deploy from there:"
+    echo "$candidates" | sed 's/^/  /'
+  else
+    echo "no package.json or index.html anywhere -- inspect manually"
+  fi
 fi
 
 echo "framework: $framework"
@@ -52,7 +79,7 @@ echo "framework: $framework"
 pm="npm"
 [ -f pnpm-lock.yaml ] && pm="pnpm"
 [ -f yarn.lock ] && pm="yarn"
-[ -f bun.lockb ] || [ -f bun.lock ] && pm="bun"
+{ [ -f bun.lockb ] || [ -f bun.lock ]; } && pm="bun"
 echo "package-manager: $pm"
 
 # database / backend hints
@@ -67,26 +94,40 @@ if ls .env* >/dev/null 2>&1; then
   grep -hsoE '^[A-Z0-9_]+' .env .env.local .env.production 2>/dev/null | sort -u | sed 's/^/env-name: /'
 fi
 
-# existing deploy config
+# existing deploy config -- if anything shows up here, the project has already
+# chosen its platform; read its docs and follow its path instead of the defaults
 echo ""
 echo "== existing deploy config =="
-for f in wrangler.toml wrangler.jsonc vercel.json netlify.toml fly.toml Dockerfile; do
+for f in wrangler.toml wrangler.jsonc vercel.json netlify.toml fly.toml Dockerfile \
+         DEPLOY.md DEPLOYMENT.md docs/DEPLOY.md; do
   [ -f "$f" ] && echo "found: $f"
 done
 [ -d .github/workflows ] && echo "found: .github/workflows/"
+if [ -f package.json ]; then
+  grep -E '"(deploy|predeploy|release)[a-z:_-]*"[[:space:]]*:' package.json | sed 's/^[[:space:]]*/script: /'
+  for d in wrangler vercel "@opennextjs/cloudflare" "@cloudflare/vite-plugin" vinext; do
+    dep_in_pkg "$d" && echo "dep: $d"
+  done
+fi
 
 echo ""
 echo "== tooling =="
-for c in node wrangler vercel; do
-  if have "$c"; then echo "$c: $("$c" --version 2>/dev/null | head -1)"; else echo "$c: NOT INSTALLED"; fi
+echo "node: $(node --version 2>/dev/null || echo 'NOT INSTALLED')"
+for c in wrangler vercel; do
+  v=$(cli_version "$c")
+  [ -n "$v" ] && echo "$c: $v" || echo "$c: NOT INSTALLED (npx $c works on demand)"
 done
 
 echo ""
 echo "== accounts =="
-if have wrangler; then
-  timeout 15 wrangler whoami >/dev/null 2>&1 && echo "cloudflare: logged in" || echo "cloudflare: NOT logged in (run: wrangler login)"
+if timeout 15 run_cli wrangler whoami >/dev/null 2>&1; then
+  echo "cloudflare: logged in"
+elif [ -n "$(cli_version wrangler)" ]; then
+  echo "cloudflare: NOT logged in (run: npx wrangler login)"
 fi
-if have vercel; then
-  v=$(timeout 15 vercel whoami 2>/dev/null)
-  [ -n "$v" ] && echo "vercel: logged in as $v" || echo "vercel: NOT logged in (run: vercel login)"
+v=$(timeout 15 run_cli vercel whoami 2>/dev/null)
+if [ -n "$v" ]; then
+  echo "vercel: logged in as $v"
+elif [ -n "$(cli_version vercel)" ]; then
+  echo "vercel: NOT logged in (run: npx vercel login)"
 fi

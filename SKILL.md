@@ -19,7 +19,7 @@ Run the detection script from the project root:
 bash <skill-dir>/scripts/preflight.sh .
 ```
 
-It reports: project type, framework, package manager, build command, database hints, which CLIs are installed, and which accounts are logged in. If the script is unavailable, inspect `package.json`, config files (`next.config.*`, `vite.config.*`, `astro.config.*`, `wrangler.toml`/`wrangler.jsonc`), and lockfiles manually.
+It reports: project type, framework, package manager, build command, database hints, which CLIs are installed, and which accounts are logged in. If it reports **candidate sub-projects**, the deployable app lives in a subdirectory (docs/monorepo layout) — re-run preflight there and treat that subdirectory as the project root for every later step. If the script is unavailable, inspect `package.json`, config files (`next.config.*`, `vite.config.*`, `astro.config.*`, `wrangler.toml`/`wrangler.jsonc`), and lockfiles manually.
 
 ### 2. Choose a platform
 
@@ -31,6 +31,8 @@ It reports: project type, framework, package manager, build command, database hi
 | Small API / server (Hono, Express-lite) | Cloudflare Workers | Free tier; port to Workers if trivial, else Vercel serverless |
 | Long-running server, WebSocket, Docker | Fly.io or Railway | Out of core scope — see `references/` note below, confirm with user |
 | Needs SQL database | Neon (Postgres) or Cloudflare D1 (SQLite) | See `references/databases.md` |
+
+Framework is a hint, not a verdict. A Next.js app may be wired for Cloudflare Workers through an adapter (`vinext`, `@opennextjs/cloudflare`) — deploying it to Vercel would split it from its database. When preflight finds an **existing deploy config** (a `deploy` script in package.json, `DEPLOY.md`, wrangler/vercel config, platform adapter deps), read it and follow the project's own deploy path; use the table only when there is none.
 
 Special case: if the user's audience is in mainland China, read `references/china-access.md` **before** choosing — platform subdomains like `*.vercel.app` are often unreachable there.
 
@@ -71,5 +73,5 @@ Exception: if the user already said "deploy it, don't ask" or this is a re-deplo
 - User's accounts, user's ownership. Never create accounts, never store credentials outside the platform CLI's own auth.
 - Free tier by default. Anything that can bill money (paid plans, usage-based resources beyond free quotas) requires explicit user approval.
 - Don't touch DNS the user didn't ask about. Custom domain setup is opt-in.
-- If the project has an existing deploy config (`vercel.json`, `wrangler.toml`, `netlify.toml`, CI workflow), respect it — ask before switching platforms.
+- If the project has an existing deploy config (`vercel.json`, `wrangler.toml`, `netlify.toml`, a `deploy` script, `DEPLOY.md`, CI workflow), respect it — ask before switching platforms.
 - One deploy attempt may fail on first-time setup (missing project, missing binding). Read the error, fix the cause, retry once or twice; if still failing, report the exact error instead of thrashing.
