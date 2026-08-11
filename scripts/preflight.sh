@@ -120,7 +120,8 @@ done
 
 echo ""
 echo "== accounts =="
-if timeout 15 run_cli wrangler whoami >/dev/null 2>&1; then
+# wrangler whoami exits 0 even when unauthenticated -- parse the output instead
+if timeout 20 run_cli wrangler whoami 2>/dev/null | grep -q "logged in"; then
   echo "cloudflare: logged in"
 elif [ -n "$(cli_version wrangler)" ]; then
   echo "cloudflare: NOT logged in (run: npx wrangler login)"

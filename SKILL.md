@@ -57,7 +57,7 @@ Exception: if the user already said "deploy it, don't ask" or this is a re-deplo
 ### 4. Execute
 
 1. **Build locally first.** Run the build command and fix errors before touching the platform. Never debug a build through repeated cloud deploys.
-2. Log in if needed (`wrangler login` / `vercel login` — these open a browser; tell the user to complete it).
+2. Log in if needed — and don't block on it. Run `bash <skill-dir>/scripts/login.sh cloudflare`: it launches the OAuth flow in the background (a browser tab opens on the user's machine) and polls `whoami` until the credential lands, so the pipeline continues the moment the user clicks approve. Tell the user a browser tab is waiting for them. On headless/SSH machines use `CLOUDFLARE_API_TOKEN` / `VERCEL_TOKEN` env vars instead.
 3. Provision the database first if one is needed, so its connection string can be set as a secret before the app deploys.
 4. Deploy with the platform CLI (exact commands in the references).
 5. Set env vars as platform secrets. **Never** commit `.env` to git or bake secrets into build output.

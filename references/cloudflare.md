@@ -57,6 +57,10 @@ CLI support is limited; use the dashboard: **Workers & Pages → project → Cus
 
 ## Gotchas
 
+- `wrangler whoami` exits 0 even when **not** authenticated — never trust the exit code, check the output for "logged in".
+- `wrangler login` waits only ~2 minutes for the browser approval, then kills its callback server (clicking Allow after that does nothing). In detached shells its "opening browser" step can silently fail. Use `scripts/login.sh cloudflare`, which extracts the OAuth URL, opens it explicitly, and polls — and warn the user the link is fresh for ~2 minutes.
+- Unauthenticated `wrangler d1 create` in a non-TTY shell reports a misleading "set CLOUDFLARE_API_TOKEN" error — the actual problem is usually just the missing login above.
+
 - First `wrangler login` on a headless machine: use `CLOUDFLARE_API_TOKEN` env var instead (user creates token at dash.cloudflare.com/profile/api-tokens, template "Edit Cloudflare Workers").
 - Pages project names are global per-account; "project already exists" on first deploy means pick another name or it was created earlier — check `npx wrangler pages project list`.
 - Free tier: Pages unlimited static requests; Workers 100k requests/day. Plenty for vibe-coded projects.
