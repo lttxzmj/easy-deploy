@@ -17,13 +17,26 @@
 
 ## 安装
 
-**Claude Code**（全局，所有项目可用）：
+**装错目录 = agent 看不见它**，而且它不会报错，只会默默用别的方案。先确认你的工具从哪读：
+
+| 工具 | 全局 skills 目录 |
+|---|---|
+| Claude Code | `~/.claude/skills/` |
+| 通用 Agent Skills 约定 | `~/.agents/skills/` |
+| 项目级（任意工具） | 项目根目录的 `.claude/skills/` 或 `.agents/skills/` |
 
 ```bash
 git clone https://github.com/lttxzmj/easy-deploy ~/.claude/skills/easy-deploy
 ```
 
-或只装到当前项目：克隆到项目内的 `.claude/skills/easy-deploy/`。
+不确定是哪个就都装上，软链即可，不必克隆两份：
+
+```bash
+git clone https://github.com/lttxzmj/easy-deploy ~/.claude/skills/easy-deploy
+mkdir -p ~/.agents/skills && ln -s ~/.claude/skills/easy-deploy ~/.agents/skills/easy-deploy
+```
+
+**验证装好了**：新开一个会话，问 AI「你有哪些 skill？」，列表里应该有 `easy-deploy`。没有就是目录不对。
 
 其他支持 Agent Skills（SKILL.md 规范）的工具，把本目录放进对应的 skills 目录即可。
 

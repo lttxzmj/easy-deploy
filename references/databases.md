@@ -1,5 +1,21 @@
 # Databases — pick the smallest thing that works
 
+**First: is this actually a decision?** The list below is for a project that has
+no database yet. A project that already has one has already chosen, usually in
+hundreds of call sites, and the question becomes migration cost rather than
+preference. Count before recommending anything:
+
+```bash
+grep -rc "\.prepare(\|prisma\.\|db\.query\|supabase\.from" --include=*.ts --include=*.js src app 2>/dev/null | grep -v :0
+```
+
+A few hundred raw platform-specific calls is a rewrite, not a switch — say the
+number out loud and let the user decide. Note also that on Workers the runtime
+and the database are coupled: D1 and R2 are reachable only through bindings, so
+"move the database to Supabase" quietly means "move off Workers too, or add an
+HTTP driver". Recommend the change that fixes the user's actual complaint; more
+often than not that is the same stack on an account they own.
+
 Decision order for a typical vibe-coded project:
 
 1. **No real persistence needed** (demo, portfolio, landing page) → no database. localStorage or a JSON file is fine; say so instead of provisioning one.
@@ -33,8 +49,21 @@ User creates the project at supabase.com (CLI project creation requires org setu
 
 ## Migrations / schema
 
-- Prisma detected → `npx prisma migrate deploy` (or `db push` for toy projects) against the new DATABASE_URL.
-- Drizzle detected → `npx drizzle-kit push`.
+A dependency in `package.json` is not evidence that the ORM is used. Confirm it
+has call sites before running its migration tool — projects routinely carry a
+drizzle or prisma dependency that nothing imports, and pushing that schema
+creates tables the app will never read while the ones it needs stay missing.
+
+```bash
+grep -rl "drizzle-orm\|@prisma/client" --include=*.ts --include=*.js src app 2>/dev/null | head
+```
+
+- Prisma, and it is imported → `npx prisma migrate deploy` (or `db push` for toy projects) against the new DATABASE_URL.
+- Drizzle, and it is imported → `npx drizzle-kit push`.
 - Raw SQL files → run via `psql`, Neon dashboard SQL editor, or `wrangler d1 execute`.
+- **No migration step at all** → many small apps run `CREATE TABLE IF NOT EXISTS`
+  on first request. An empty database is then the correct starting state; load
+  one page and the schema appears. Check for this before hunting for a schema
+  file that does not exist.
 
 Always run schema setup **before** first deploy verification, or the "verify a DB route" step will fail for the wrong reason.

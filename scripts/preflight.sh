@@ -7,6 +7,18 @@ dir="${1:-.}"
 cd "$dir" 2>/dev/null || { echo "ERROR: cannot cd to '$dir'"; exit 1; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
+
+# `timeout` is GNU coreutils and is NOT on macOS, where most users of this skill
+# are. Calling it directly made every guarded command fail, so account detection
+# silently reported "NOT logged in" forever. Fall back to gtimeout, then to
+# running the command unguarded -- a missing timeout is better than a wrong answer.
+tmout() {
+  local secs="$1"; shift
+  if have timeout; then timeout "$secs" "$@"
+  elif have gtimeout; then gtimeout "$secs" "$@"
+  else "$@"
+  fi
+}
 dep_in_pkg() { [ -f package.json ] && grep -qE "\"$1\"[[:space:]]*:" package.json; }
 
 # CLIs like wrangler are often a local devDependency, not a global install.
@@ -89,10 +101,10 @@ for d in prisma drizzle-orm mongoose pg mysql2 better-sqlite3 @supabase/supabase
   dep_in_pkg "$d" && echo "dep: $d"
 done
 [ -d prisma ] && echo "dir: prisma/ (check schema.prisma datasource)"
-if ls .env* >/dev/null 2>&1; then
-  # names only -- never print values
-  grep -hsoE '^[A-Z0-9_]+' .env .env.local .env.production 2>/dev/null | sort -u | sed 's/^/env-name: /'
-fi
+# names only -- never print values. .dev.vars is where Workers projects keep their
+# secrets locally, so omitting it misses every env name in a Cloudflare app.
+grep -hsoE '^[A-Z0-9_]+' .env .env.local .env.production .dev.vars 2>/dev/null \
+  | sort -u | sed 's/^/env-name: /'
 
 # existing deploy config -- if anything shows up here, the project has already
 # chosen its platform; read its docs and follow its path instead of the defaults
@@ -121,12 +133,35 @@ done
 echo ""
 echo "== accounts =="
 # wrangler whoami exits 0 even when unauthenticated -- parse the output instead
-if timeout 20 run_cli wrangler whoami 2>/dev/null | grep -q "logged in"; then
+cf_who=$(tmout 20 run_cli wrangler whoami 2>/dev/null)
+if printf '%s' "$cf_who" | grep -q "logged in"; then
   echo "cloudflare: logged in"
+  # Needed to build the dashboard links below. The account id is only ever shown
+  # here, and the user cannot navigate to those pages without it.
+  acct=$(printf '%s' "$cf_who" | grep -oE '[0-9a-f]{32}' | head -1)
+  [ -n "$acct" ] && echo "cloudflare-account-id: $acct"
+
+  # One-time account setup that no CLI can perform, and that fails late: with no
+  # subdomain, `wrangler deploy` uploads the Worker and only then errors out
+  # with no URL, having answered its own prompt with "no".
+  echo ""
+  echo "== cloudflare account bootstrap =="
+  if tmout 20 run_cli wrangler r2 bucket list >/dev/null 2>&1; then
+    echo "r2: enabled"
+  else
+    echo "r2: NOT enabled -- USER ACTION: dash.cloudflare.com/${acct:-<account-id>}/r2"
+    echo "    wants a payment method even on the free tier; blocks object storage only"
+  fi
+  # No CLI command reports the subdomain, so this is advisory rather than a check.
+  echo "workers.dev subdomain: not readable by CLI. If 'wrangler deploy' ends with"
+  echo "    'register a workers.dev subdomain', USER ACTION:"
+  echo "    dash.cloudflare.com/${acct:-<account-id>}/workers/onboarding"
+  echo "    lowercase/digits/hyphens, globally unique, effectively permanent, and"
+  echo "    account-wide -- pick a personal handle, not this project's name"
 elif [ -n "$(cli_version wrangler)" ]; then
-  echo "cloudflare: NOT logged in (run: npx wrangler login)"
+  echo "cloudflare: NOT logged in (run: scripts/login.sh cloudflare)"
 fi
-v=$(timeout 15 run_cli vercel whoami 2>/dev/null)
+v=$(tmout 15 run_cli vercel whoami 2>/dev/null)
 if [ -n "$v" ]; then
   echo "vercel: logged in as $v"
 elif [ -n "$(cli_version vercel)" ]; then
