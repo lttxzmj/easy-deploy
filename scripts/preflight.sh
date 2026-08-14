@@ -67,6 +67,26 @@ if [ -f package.json ]; then
   fi
 
   grep -q '"build"' package.json && echo "has-build-script: yes" || echo "has-build-script: no"
+
+  # Not everything with a package.json and a build script is a website. Browser
+  # extensions, CLIs, libraries and desktop apps all look identical to framework
+  # detection, and "deploy it anyway" wastes a real deploy to produce something
+  # nobody can open. Report the kind; let the agent stop and ask.
+  kind=""
+  if [ -f manifest.json ] && grep -q '"manifest_version"' manifest.json 2>/dev/null; then
+    kind="browser-extension"
+  elif [ -f public/manifest.json ] && grep -q '"manifest_version"' public/manifest.json 2>/dev/null; then
+    kind="browser-extension"
+  elif dep_in_pkg electron; then
+    kind="desktop-app (electron)"
+  elif dep_in_pkg react-native || dep_in_pkg expo; then
+    kind="mobile-app"
+  elif grep -qE '"bin"[[:space:]]*:' package.json; then
+    kind="cli-tool"
+  elif grep -qE '"(main|exports|module)"[[:space:]]*:' package.json && [ "$framework" = "unknown" ]; then
+    kind="library (no framework detected)"
+  fi
+  [ -n "$kind" ] && echo "NOT-A-WEBSITE: $kind -- confirm with the user before deploying anything"
 elif [ -f index.html ]; then
   framework="static"
   echo "package.json: no (index.html at root -> pure static)"
@@ -86,6 +106,24 @@ fi
 
 echo "framework: $framework"
 [ -n "$build_cmd" ] && echo "build: npm run $build_cmd -> $output_dir/"
+
+# Naming the framework is a means, not the end -- what decides the platform is
+# what the build emits. Detection by dependency returns "unknown" for most real
+# projects; an already-built output directory answers the same question without
+# knowing the framework at all.
+for candidate in dist build .output out public; do
+  if [ -f "$candidate/index.html" ]; then
+    echo "built-output: $candidate/ contains index.html -> servable as static"
+    break
+  elif [ -d "$candidate" ] && [ "$framework" = "unknown" ]; then
+    echo "built-output: $candidate/ exists but has no index.html -- inspect before assuming static"
+    break
+  fi
+done
+if [ "$framework" = "unknown" ]; then
+  echo "HINT: framework unknown -- run the build, then classify by what lands in the"
+  echo "      output directory (index.html + assets => static host; a server entry => Workers/Vercel)."
+fi
 
 # package manager from lockfile
 pm="npm"

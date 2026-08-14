@@ -8,12 +8,24 @@
 
 对 AI 说一句「帮我把这个项目部署上线」，它会：
 
-1. 自动识别项目类型（纯静态 / Vite / Astro / Next.js / 小型 API / 是否需要数据库）
+1. 识别项目类型（纯静态 / Vite / Astro / Next.js / 小型 API / 是否需要数据库）
 2. 选择合适的免费平台（静态和 SPA → Cloudflare Pages，Next.js → Vercel，小 API → Workers，数据库 → Neon 或 D1）
-3. 先在本地构建通过，向你确认部署计划（平台、名称、环境变量、费用）后再执行
+3. 先在本地构建通过，向你确认部署计划后再执行
 4. 部署、配好密钥、用 HTTP 请求验证真的可以访问，最后告诉你线上地址和重新部署的命令
 
-面向国内访问的项目有专门的处理逻辑：会提醒你 `*.vercel.app` 在国内经常打不开、建议绑定自有域名、必要时推荐腾讯 EdgeOne Pages，并如实说明备案的边界（见 `references/china-access.md`）。
+## 为什么不直接用 CLI 或官方 MCP
+
+`vercel`、`wrangler`、`fly launch` 都能部署，Cloudflare / Netlify / Vercel 也都有官方 MCP。它们给的是**执行能力**，而且比这个 skill 可靠。
+
+这个 skill 管的是**它们不管的那一半——判断**：
+
+- **这东西能公开吗？** 没有登录的后台工具部署上去，谁拿到地址谁就能用，连带烧你的 API 额度。部署前会先告诉你，并给出加门禁的选项
+- **“免费”不等于不用绑卡。** 比如 Cloudflare R2 即使在免费额度内也要先绑支付方式——这件事会写在确认里，而不是等你撞到
+- **这个项目真的该部署吗？** 浏览器扩展、CLI、组件库都有 package.json 和 build 脚本，部署完只会得到一个没人能打开的网址
+- **已经跑在别处的项目，算的是迁移成本而不是“哪个平台更好”。** 几百处绑定写死的代码不会“顺便换成 Supabase”
+- **国内能不能访问。** 会提醒 `*.vercel.app` 在国内经常打不开、建议绑自有域名、必要时推荐腾讯 EdgeOne，并如实说明备案边界（见 `references/china-access.md`）
+
+以及一堆只有真踩过才知道的坑：新的 workers.dev 子域最初 30–60 秒 TLS 会失败，看起来就像部署坏了；`wrangler deploy` 在没有子域时会先打印 `Uploaded`、然后自己回答自己的提问并失败；`wrangler secret put` 在没有 wrangler.toml 的项目上会静默不写入。这些都写在 `references/` 里。
 
 ## 安装
 

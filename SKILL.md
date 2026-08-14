@@ -46,6 +46,21 @@ not one per wall. Details in `references/cloudflare.md`.
 | Long-running server, WebSocket, Docker | Fly.io or Railway | Out of core scope — see `references/` note below, confirm with user |
 | Needs SQL database | Neon (Postgres) or Cloudflare D1 (SQLite) | See `references/databases.md` |
 
+**If preflight says `NOT-A-WEBSITE`, stop and ask.** A browser extension, CLI,
+library, Electron or React Native project has a `package.json` and a build
+script and is indistinguishable from a web app to framework detection — and
+deploying one produces a URL nobody can open. Say what it looks like and what
+the user probably wants instead (publish to a store, `npm publish`, ship a
+binary). Deploy anyway only if the user confirms there is a web target here.
+
+**If the framework is `unknown`, classify by what the build emits, not by what
+the dependencies are named.** Dependency matching covers a dozen frameworks and
+returns `unknown` for most real projects, which is not a reason to guess. Run the
+build and look at the output directory: `index.html` plus assets means a static
+host; a server entry point means Workers or Vercel serverless; nothing
+recognisable means ask. Preflight reports `built-output:` when a build has
+already run.
+
 Framework is a hint, not a verdict. When preflight finds an **existing deploy config** (a `deploy` script in package.json, `DEPLOY.md`, wrangler/vercel config, platform adapter deps), read it and follow the project's own deploy path; use the table only when there is none.
 
 **A project that already runs somewhere is not choosing a platform — it is paying
