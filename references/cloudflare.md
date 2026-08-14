@@ -145,6 +145,28 @@ CLI support is limited; use the dashboard: **Workers & Pages → project → Cus
 
 ## Gotchas
 
+- **A brand-new workers.dev subdomain fails TLS for the first ~30–60s** while the
+  certificate provisions. `curl` returns `000` and exit code 35, right after a
+  deploy that printed a URL and a version id — it looks exactly like a broken
+  deploy and is not. Retry with backoff before concluding anything. Do not
+  redeploy; it changes nothing and wastes the user's time.
+- **Right after a deploy, different paths can briefly answer from different
+  versions** while the rollout propagates. If one route shows old behaviour and
+  another shows new, wait and re-check before debugging code that is already
+  correct.
+- **Every `wrangler` subcommand needs to know the Worker name**, and for adapter
+  projects there is no `wrangler.toml` to read it from. `wrangler secret put`,
+  `secret list` and `tail` all fail with `Required Worker name missing` unless
+  you pass the generated config:
+
+  ```bash
+  npx wrangler secret put MY_KEY -c dist/server/wrangler.json
+  npx wrangler secret list      -c dist/server/wrangler.json   # verify it landed
+  ```
+
+  Worth doing the `secret list` check every time: when the `put` is piped rather
+  than typed, its error scrolls past and the secret is silently never set. The
+  app then deploys fine and fails at runtime on a missing variable.
 - **`wrangler deploy` can "succeed" and still leave you with nothing.** With no
   workers.dev subdomain it uploads the Worker, prints `Uploaded <name>`, then
   asks whether to register a subdomain — and in a non-interactive shell answers

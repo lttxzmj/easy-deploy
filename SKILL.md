@@ -99,7 +99,19 @@ Exception: if the user already said "deploy it, don't ask" or this is a re-deplo
 ### 5. Verify and report
 
 - `curl -sI <url>` — expect HTTP 200 (or 3xx to a working page). For SPAs also check a deep route returns the app, not 404.
-- If the site needs a database, hit one route that touches it.
+- **Retry before believing a failure.** On a first-ever deploy the certificate may
+  still be provisioning, and a rollout can take a moment to reach every edge, so
+  the first request or two can fail at the TLS layer (`curl` exit 35, code `000`)
+  or answer from the previous version. Poll a few times with a short sleep. A
+  deploy that printed a URL and a version id has already succeeded; do not
+  redeploy to "fix" it.
+- If the site needs a database, hit one route that touches it — and read the
+  body, not just the status. A route can answer 200 from cache or a stub while
+  the binding is broken.
+- If you set any secret, confirm it exists on the platform rather than assuming
+  the write succeeded.
+- If a gate was added, verify both directions: the protected paths reject without
+  credentials, and accept with them.
 - Report to the user: live URL, platform dashboard link, how to bind a custom domain (one-liner, details in references), and how to re-deploy (`the exact command`).
 
 ## Rules
