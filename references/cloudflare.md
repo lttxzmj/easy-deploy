@@ -33,22 +33,31 @@ deploy without object storage and note which features go dark.
 
 ## Pages — static sites and SPA builds
 
-First deploy (creates the project automatically):
+**Create the project first.** `pages deploy` only offers to create a missing
+project when it can prompt; in a non-interactive shell — which is every agent —
+it fails with `Project not found [code: 8000007]`. Two commands, always:
 
 ```bash
 npm run build                          # or the detected build command
-npx wrangler pages deploy <output-dir> --project-name=<name>
+npx wrangler pages project create <name> --production-branch=main
+npx wrangler pages deploy <output-dir> --project-name=<name> --branch=main
 ```
 
 - `<output-dir>`: `dist/` (Vite/Astro), `build/` (CRA), or `.` for plain static.
-- `<name>` becomes the URL: `https://<name>.pages.dev`. Lowercase, hyphens only.
-- Re-deploy = run the same command again.
+- `<name>` must be lowercase with hyphens, and is unique per account.
+- Re-deploy = the `deploy` line again; `project create` is once.
+- `--branch=main` matters: without it wrangler infers the branch from git, and a
+  deploy on any other branch is a preview, not production.
 
-SPA routing: if deep links 404, add a `_redirects` file to the output dir:
+**Report `https://<name>.pages.dev`, not the URL wrangler prints.** It prints the
+per-deployment URL (`https://<hash>.<name>.pages.dev`), which changes on every
+deploy and whose certificate is often not ready — measured 000/exit 35 for over a
+minute after a first deploy while the production hostname was already serving
+200. Handing the user the printed URL hands them a broken link.
 
-```
-/* /index.html 200
-```
+SPA routing works by default: Pages serves `index.html` for any path that does
+not match a file. A `_redirects` file with `/* /index.html 200` is only needed to
+override that, not to enable it.
 
 Env vars for the **build** happen locally (they're baked in at build time — so anything in a `VITE_*`/`NEXT_PUBLIC_*` var is public; never put secrets there).
 

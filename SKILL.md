@@ -113,7 +113,16 @@ Exception: if the user already said "deploy it, don't ask" or this is a re-deplo
 
 ### 5. Verify and report
 
-- `curl -sI <url>` — expect HTTP 200 (or 3xx to a working page). For SPAs also check a deep route returns the app, not 404.
+- `curl -sI <url>` — expect HTTP 200 (or 3xx to a working page).
+- **On static hosts a 200 proves almost nothing.** Cloudflare Pages serves
+  `index.html` for every path that does not match a file, so a deep route, a
+  typo'd route and a missing stylesheet all answer 200 with the same HTML. Fetch
+  the body and check for something only the real page contains — its `<title>`,
+  a heading — and fetch one asset and confirm it is CSS or JS rather than HTML.
+  Verifying by status code alone will pass a completely broken build.
+- Use the **stable** URL, not whatever the CLI printed. Per-deployment URLs
+  change every deploy and their certificates lag; the user needs the one that
+  keeps working.
 - **Retry before believing a failure.** On a first-ever deploy the certificate may
   still be provisioning, and a rollout can take a moment to reach every edge, so
   the first request or two can fail at the TLS layer (`curl` exit 35, code `000`)
